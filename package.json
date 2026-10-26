@@ -1,0 +1,32 @@
+{
+  "name": "proddle",
+  "version": "0.0.1",
+  "description": "Walk a site from a yard file, prod each clickable, and write a slate of what happened.",
+  "license": "MIT",
+  "author": "Irfan Sencer Senyurt",
+  "type": "module",
+  "bin": {
+    "proddle": "./dist/latch.js"
+  },
+  "files": [
+    "dist",
+    "yards"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "proddle": "node dist/latch.js"
+  },
+  "dependencies": {
+    "playwright": "^1.64.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.0",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  }
+}
