@@ -1,0 +1,18 @@
+{
+  "porch": "http://127.0.0.1:8741",
+  "pageCap": 20,
+  "depthCap": 2,
+  "leashWords": [
+    "delete",
+    "remove",
+    "logout",
+    "sign out",
+    "buy",
+    "pay",
+    "checkout",
+    "unsubscribe"
+  ],
+  "leashSelectors": [],
+  "openWaitMs": 15000,
+  "prodWaitMs": 8000
+}
