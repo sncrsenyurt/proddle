@@ -4,7 +4,7 @@ I am writing a command line tool that walks a website and prods the clickable th
 
 Each prod will be filed as fine, a broken link, a yelp, or a limp. The output will be one HTML file I can open by itself. A leash keeps it off delete, remove, logout, sign out, buy, pay, checkout, and unsubscribe, and I can add more words or selectors.
 
-The yard file loads and is checked. The walk, the prods, and the slate are not written yet. The command still prints one line and exits.
+The yard file loads and is checked. The amble walks same-origin pages. The command does not call it yet. Finding clickables, prodding them, and writing the slate are not written yet.
 
 ## Words
 
@@ -37,14 +37,26 @@ Caps and waits have to be positive whole numbers. Skip fields have to be lists o
 
 `yards/porch.yard.json` is a sample pointed at `http://127.0.0.1:8741`. Nothing is listening there. It repeats the built-in leash words. That is redundant, and it still loads.
 
+## Amble
+
+`amble` in `src/amble.ts` starts at the porch and follows links. It stays on the same origin: same protocol, host, and port. `mailto:`, `tel:`, and `javascript:` are ignored, and so is any other scheme.
+
+I drop the hash. A trailing slash is the same page, except the root, which keeps its slash. `https://example.com//` is the root too. A bare `?` is the same as no query. A query that has a value stays, parameter order included, so `?b=1&a=2` and `?a=2&b=1` are two pages.
+
+The porch is depth 0. I open a page when its depth is within `depthCap`, and I only follow links from a page when the next page would still be within the cap. A `depthCap` of 1 is the porch and the pages it links to. The default is 2. `pageCap` is how many pages I open. The default is 20. The walk is breadth-first, in the order the links were found. A page is opened once.
+
+`readLinks` fetches a page and returns the hrefs on it. The tests pass an in-memory site. The walk itself does not open a browser.
+
 ## Layout
 
 - `src/latch.ts` is the command. It prints one line and exits. It does not open a browser, and it does not read the yard yet.
 - `src/yard.ts` reads a yard file and checks it.
+- `src/links.ts` turns a raw href into a page on this origin, or nothing.
+- `src/amble.ts` is the walk.
 - `npm run typecheck` runs `tsc --noEmit`.
 - `npm run build` writes `dist/latch.js`, which is what the `proddle` bin field points at.
 - `npm test` runs Vitest.
 
 ## Still to come
 
-The amble, finding clickables, using the leash while prodding, classifying each prod, a non-zero exit when something is wrong, the slate, a small demo site, and CI.
+Finding clickables, using the leash while prodding, classifying each prod, a non-zero exit when something is wrong, the slate, a small demo site, and CI.
