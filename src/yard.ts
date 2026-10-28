@@ -12,7 +12,7 @@ export const builtInLeashWords = [
   "unsubscribe",
 ] as const;
 
-const countDefaults = {
+export const countDefaults = {
   pageCap: 20,
   depthCap: 2,
   openWaitMs: 15000,

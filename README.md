@@ -4,7 +4,7 @@ I am writing a command line tool that walks a website and prods the clickable th
 
 Each prod will be filed as fine, a broken link, a yelp, or a limp. The output will be one HTML file I can open by itself. A leash keeps it off delete, remove, logout, sign out, buy, pay, checkout, and unsubscribe, and I can add more words or selectors.
 
-The yard file loads and is checked. The amble walks same-origin pages. The command does not call it yet. Finding clickables, prodding them, and writing the slate are not written yet.
+The yard file loads and is checked. The command walks same-origin pages from a url or a yard file, and prints the urls it opened. Finding clickables, prodding them, and writing the slate are not written yet.
 
 ## Words
 
@@ -45,14 +45,26 @@ I drop the hash. A trailing slash is the same page, except the root, which keeps
 
 The porch is depth 0. I open a page when its depth is within `depthCap`, and I only follow links from a page when the next page would still be within the cap. A `depthCap` of 1 is the porch and the pages it links to. The default is 2. `pageCap` is how many pages I open. The default is 20. The walk is breadth-first, in the order the links were found. A page is opened once.
 
-`readLinks` fetches a page and returns the hrefs on it. The tests pass an in-memory site. The walk itself does not open a browser.
+`readLinks` fetches a page and returns the hrefs on it. The tests pass an in-memory site and do not launch a browser. `src/chromium.ts` is the Playwright version: one headless Chromium, a fresh page per url, `a[href]` after `domcontentloaded`. `openWaitMs` is the navigation timeout. A page that only adds its links from script after that can look empty.
+
+## Command
+
+`proddle https://example.com` walks that url with the default caps and the default open wait.
+
+`proddle yards/porch.yard.json` reads the yard and walks its porch.
+
+`proddle https://example.com yards/site.yard.json` walks that url with the yard's `pageCap`, `depthCap`, and `openWaitMs`.
+
+It prints each opened page, one url per line. It does not prod anything and it does not write a slate. A bad yard, or a url that is not http or https, is refused before Chromium starts.
 
 ## Layout
 
-- `src/latch.ts` is the command. It prints one line and exits. It does not open a browser, and it does not read the yard yet.
+- `src/latch.ts` is the command.
+- `src/args.ts` decides the porch and the caps from the arguments.
 - `src/yard.ts` reads a yard file and checks it.
 - `src/links.ts` turns a raw href into a page on this origin, or nothing.
 - `src/amble.ts` is the walk.
+- `src/chromium.ts` reads links with Playwright.
 - `npm run typecheck` runs `tsc --noEmit`.
 - `npm run build` writes `dist/latch.js`, which is what the `proddle` bin field points at.
 - `npm test` runs Vitest.
