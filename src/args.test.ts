@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { readArgs, WalkComplaint } from "./args.js";
-import { YardComplaint } from "./yard.js";
+import { builtInLeashWords, YardComplaint } from "./yard.js";
 
 const porchYardPath = fileURLToPath(new URL("../yards/porch.yard.json", import.meta.url));
 
@@ -35,6 +35,8 @@ describe("readArgs", () => {
       pageCap: 20,
       depthCap: 2,
       openWaitMs: 15000,
+      leashWords: [...builtInLeashWords],
+      leashSelectors: [],
     });
   });
 
@@ -51,6 +53,8 @@ describe("readArgs", () => {
       pageCap: 4,
       depthCap: 1,
       openWaitMs: 3000,
+      leashWords: [...builtInLeashWords],
+      leashSelectors: [],
     });
   });
 
@@ -60,6 +64,8 @@ describe("readArgs", () => {
       pageCap: 20,
       depthCap: 2,
       openWaitMs: 15000,
+      leashWords: [...builtInLeashWords],
+      leashSelectors: [],
     });
   });
 
@@ -75,6 +81,8 @@ describe("readArgs", () => {
       pageCap: 7,
       depthCap: 3,
       openWaitMs: 15000,
+      leashWords: [...builtInLeashWords],
+      leashSelectors: [],
     });
   });
 
@@ -98,6 +106,65 @@ describe("readArgs", () => {
     expect(() => readArgs(["ftp://example.com/a", porchYardPath])).toThrow(
       "proddle: the start url has to be http or https.",
     );
+  });
+
+  it("adds leash words and selectors from the flags", () => {
+    const filePath = writeYardJson({
+      porch: "https://example.com/ignored",
+      leashWords: ["archive"],
+      leashSelectors: [".old"],
+    });
+
+    expect(
+      readArgs([
+        "--leash",
+        "Archive",
+        "--leash",
+        "cancel plan",
+        "https://example.com/start",
+        "--leash-selector",
+        ".bye",
+        filePath,
+        "--leash-selector=.old",
+        "--leash=log out",
+      ]),
+    ).toEqual({
+      porch: "https://example.com/start",
+      pageCap: 20,
+      depthCap: 2,
+      openWaitMs: 15000,
+      leashWords: [...builtInLeashWords, "archive", "cancel plan"],
+      leashSelectors: [".old", ".bye"],
+    });
+  });
+
+  it("keeps a selector's case", () => {
+    expect(readArgs(["https://example.com/", "--leash-selector", " #Pay "]).leashSelectors).toEqual(["#Pay"]);
+  });
+
+  it("refuses an unknown flag", () => {
+    expect(() => readArgs(["--page-cap", "3", "https://example.com/"])).toThrow(
+      'proddle: unknown flag "--page-cap".',
+    );
+  });
+
+  it("refuses a flag with no value", () => {
+    expect(() => readArgs(["https://example.com/", "--leash"])).toThrow("proddle: --leash needs a word.");
+    expect(() => readArgs(["--leash="])).toThrow("proddle: --leash needs a word.");
+    expect(() => readArgs(["https://example.com/", "--leash-selector", "   "])).toThrow(
+      "proddle: --leash-selector needs a selector.",
+    );
+    expect(() => readArgs(["--leash", "--leash-selector", ".bye", "https://example.com/"])).toThrow(
+      "proddle: --leash needs a word.",
+    );
+  });
+
+  it("still wants a url when the only arguments are flags", () => {
+    expect(() => readArgs(["--leash", "archive"])).toThrow("proddle: pass a url, or a path to a yard file.");
+  });
+
+  it("treats arguments after -- as paths", () => {
+    expect(readArgs(["--", "https://example.com/docs/"]).porch).toBe("https://example.com/docs");
   });
 
   it("still refuses a bad yard", () => {

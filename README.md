@@ -4,7 +4,7 @@ I am writing a command line tool that walks a website and prods the clickable th
 
 Each prod will be filed as fine, a broken link, a yelp, or a limp. The output will be one HTML file I can open by itself. A leash keeps it off delete, remove, logout, log out, sign out, buy, pay, checkout, purchase, unsubscribe, deactivate, and cancel subscription. I can add more words or selectors.
 
-The yard file loads and is checked. The command walks same-origin pages from a url or a yard file, and prints the urls it opened. Finding clickables, prodding them, and writing the slate are not written yet.
+The yard file loads and is checked. The command walks same-origin pages from a url or a yard file. On each page it lists the clickable things it found, and marks the ones the leash holds. It does not prod them yet, and it does not write a slate.
 
 ## Words
 
@@ -18,6 +18,8 @@ The yard file loads and is checked. The command walks same-origin pages from a u
 - bolt — a navigation caused by a prod
 - scratch — a DOM change after a prod
 - leash — skip words and selectors that must not be prodded
+- sniff — the look over one page for things that can be clicked
+- scent — one of those: a kind, a short label, a selector, and a leash hold when it must not be prodded
 - slate — the self-contained HTML report
 
 ## Yard file
@@ -28,7 +30,7 @@ The other fields can be left out:
 
 - `pageCap` — page limit for the amble. Default 20.
 - `depthCap` — depth limit for the amble. Default 2.
-- `leashWords` — more words to skip. Default none. The built-in leash above always applies, and these are added. I store words in lowercase and drop repeats.
+- `leashWords` — more words to skip. Default none. The built-in leash above always applies, and these are added. I store words in lowercase and drop repeats. How a word matches is under Sniff.
 - `leashSelectors` — CSS selectors to skip. Default none. There is no built-in selector list.
 - `openWaitMs` — how long a page may take to open, in milliseconds. Default 15000.
 - `prodWaitMs` — how long to wait after a prod for the page to settle, in milliseconds. Default 8000.
@@ -45,30 +47,53 @@ I drop the hash. A trailing slash is the same page, except the root, which keeps
 
 The porch is depth 0. I open a page when its depth is within `depthCap`, and I only follow links from a page when the next page would still be within the cap. A `depthCap` of 1 is the porch and the pages it links to. The default is 2. `pageCap` is how many pages I open. The default is 20. The walk is breadth-first, in the order the links were found. A page is opened once.
 
-`readLinks` fetches a page and returns the hrefs on it. The tests pass an in-memory site and do not launch a browser. `src/chromium.ts` is the Playwright version: one headless Chromium, a fresh page per url, `a[href]` after `domcontentloaded`. `openWaitMs` is the navigation timeout. A page that only adds its links from script after that can look empty.
+`readLinks` fetches a page and returns the hrefs on it. The tests pass an in-memory site and do not launch a browser. `src/chromium.ts` is the Playwright version: one headless Chromium, a fresh page per url, after `domcontentloaded`. It reads `a[href]` and sniffs that same load. `openWaitMs` is the navigation timeout. A page that only adds its links from script after that can look empty, and the sniff can miss those too.
+
+## Sniff
+
+On each page the walk opens, I look for clickable things. Pages at the depth cap, and the page that fills the page cap, are not fetched while looking for links. I open those once, just to sniff.
+
+I keep an `a` with an href, a `button`, an `input` of type button, submit, or reset, `role="button"`, `role="link"`, `role="menuitem"`, and anything with an onclick attribute or an onclick property. `addEventListener` is not visible from the page. A cursor of `pointer` counts when that element sets it and its parent does not, so a card styled that way is included and the text inside it is not.
+
+Hidden and disabled elements are left out. That includes `hidden`, `inert`, `display: none`, `visibility: hidden`, `pointer-events: none`, a zero-size box, `disabled`, and `aria-disabled="true"`.
+
+Each scent gets one selector, the first of these that is unique on the page: an id, a `data-testid`, an `aria-label`, a role plus accessible name, the text, then a structural path such as `body > main > button:nth-of-type(2)`. The same element is listed once. Two elements that would share a selector fall back to the path.
+
+A leash word matches on its own, ignoring case, against the text, the aria-label, the title, the value, or the href. A hyphen or underscore counts as a space, so `sign-out` matches `sign out`. I also look with those marks removed, so `check-out` matches `checkout`, and `signout` matches `sign out`. `pay` matches `Pay now` and `/pay`. It does not match `paper` or `payment`. A leash selector is css, checked with `element.matches`. The built-in words always apply. A held scent stays in the list with the reason.
 
 ## Command
 
-`proddle https://example.com` walks that url with the default caps and the default open wait.
+`proddle https://example.com` walks that url with the default caps, the default open wait, and the built-in leash.
 
 `proddle yards/porch.yard.json` reads the yard and walks its porch.
 
-`proddle https://example.com yards/site.yard.json` walks that url with the yard's `pageCap`, `depthCap`, and `openWaitMs`.
+`proddle https://example.com yards/site.yard.json` walks that url with the yard's caps, open wait, and leash.
 
-It prints each opened page, one url per line. It does not prod anything and it does not write a slate. A bad yard, or a url that is not http or https, is refused before Chromium starts.
+`--leash archive` adds a word. `--leash-selector .danger` adds a css selector. Both can be repeated, and `--leash=archive` works too. They join the yard's leash. The built-in words stay.
+
+It prints each page, then one line per scent:
+
+    https://example.com/
+      anchor "Docs" #docs
+      button "Delete" #del held: word "delete"
+
+A scent the leash holds is still listed, with the reason. Nothing is clicked, and no slate is written. A bad yard, an unknown flag, or a url that is not http or https, is refused before Chromium starts. A leash selector that is not css is reported and ignored.
 
 ## Layout
 
 - `src/latch.ts` is the command.
-- `src/args.ts` decides the porch and the caps from the arguments.
+- `src/args.ts` decides the porch, the caps, and the leash from the arguments.
 - `src/yard.ts` reads a yard file and checks it.
 - `src/links.ts` turns a raw href into a page on this origin, or nothing.
 - `src/amble.ts` is the walk.
-- `src/chromium.ts` reads links with Playwright.
+- `src/leash.ts` decides whether a leash word or selector holds a scent.
+- `src/selector.ts` builds a selector from the hints gathered on the page.
+- `src/sniff.ts` collects the scents.
+- `src/chromium.ts` opens pages with Playwright and sniffs them.
 - `npm run typecheck` runs `tsc --noEmit`.
 - `npm run build` writes `dist/latch.js`, which is what the `proddle` bin field points at.
 - `npm test` runs Vitest.
 
 ## Still to come
 
-Finding clickables, using the leash while prodding, classifying each prod, a non-zero exit when something is wrong, the slate, a small demo site, and CI.
+Prodding, classifying each prod, a non-zero exit when something is wrong, the slate, a small demo site, and CI.

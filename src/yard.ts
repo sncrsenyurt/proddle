@@ -237,6 +237,26 @@ function takeStringList(
   return kept;
 }
 
+export function joinLeash(
+  words: readonly string[],
+  selectors: readonly string[],
+): { leashWords: string[]; leashSelectors: string[] } {
+  const cleanedWords: string[] = [];
+  for (const word of words) {
+    const trimmed = word.trim().toLowerCase();
+    if (trimmed !== "") cleanedWords.push(trimmed);
+  }
+  const cleanedSelectors: string[] = [];
+  for (const selector of selectors) {
+    const trimmed = selector.trim();
+    if (trimmed !== "") cleanedSelectors.push(trimmed);
+  }
+  return {
+    leashWords: mergeLeashWords(cleanedWords),
+    leashSelectors: dedupe(cleanedSelectors),
+  };
+}
+
 function mergeLeashWords(userWords: readonly string[]): string[] {
   const seen = new Set<string>(builtInLeashWords);
   const merged: string[] = [...builtInLeashWords];
