@@ -1,15 +1,18 @@
 import { readFileSync } from "node:fs";
 
-/** Always skipped, whether or not a yard repeats them. */
 export const builtInLeashWords = [
   "delete",
   "remove",
   "logout",
+  "log out",
   "sign out",
   "buy",
   "pay",
   "checkout",
+  "purchase",
   "unsubscribe",
+  "deactivate",
+  "cancel subscription",
 ] as const;
 
 export const countDefaults = {

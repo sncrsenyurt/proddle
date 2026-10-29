@@ -9,11 +9,15 @@ const safetyWords = [
   "delete",
   "remove",
   "logout",
+  "log out",
   "sign out",
   "buy",
   "pay",
   "checkout",
+  "purchase",
   "unsubscribe",
+  "deactivate",
+  "cancel subscription",
 ] as const;
 
 const porchYardPath = fileURLToPath(new URL("../yards/porch.yard.json", import.meta.url));

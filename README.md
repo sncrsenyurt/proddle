@@ -2,7 +2,7 @@
 
 I am writing a command line tool that walks a website and prods the clickable things on it. Same origin only, with a cap on pages and a cap on depth. On each page it should find buttons, links, `role="button"`, and elements that look like they carry a click handler. Each one gets a prod in a fresh page. I want a record of what followed: navigation, network requests, DOM changes, console errors, uncaught page errors, and HTTP 4xx or 5xx.
 
-Each prod will be filed as fine, a broken link, a yelp, or a limp. The output will be one HTML file I can open by itself. A leash keeps it off delete, remove, logout, sign out, buy, pay, checkout, and unsubscribe, and I can add more words or selectors.
+Each prod will be filed as fine, a broken link, a yelp, or a limp. The output will be one HTML file I can open by itself. A leash keeps it off delete, remove, logout, log out, sign out, buy, pay, checkout, purchase, unsubscribe, deactivate, and cancel subscription. I can add more words or selectors.
 
 The yard file loads and is checked. The command walks same-origin pages from a url or a yard file, and prints the urls it opened. Finding clickables, prodding them, and writing the slate are not written yet.
 

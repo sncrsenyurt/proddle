@@ -6,11 +6,15 @@
     "delete",
     "remove",
     "logout",
+    "log out",
     "sign out",
     "buy",
     "pay",
     "checkout",
-    "unsubscribe"
+    "purchase",
+    "unsubscribe",
+    "deactivate",
+    "cancel subscription"
   ],
   "leashSelectors": [],
   "openWaitMs": 15000,
