@@ -1,19 +1,26 @@
 #!/usr/bin/env node
+import { pathToFileURL } from "node:url";
 import { amble } from "./amble.js";
 import { readArgs, WalkComplaint } from "./args.js";
 import { openChromium } from "./chromium.js";
+import { formatProdLine, formatTally, prodExitCode, type ProdRow } from "./prod.js";
 import { scentsFrom, type Look, type Scent } from "./sniff.js";
 import { YardComplaint } from "./yard.js";
 
-async function main(): Promise<void> {
+type Sink = { write(chunk: string): void };
+
+export async function run(
+  argv: readonly string[],
+  stdout: Sink = process.stdout,
+  stderr: Sink = process.stderr,
+): Promise<number> {
   let plan;
   try {
-    plan = readArgs(process.argv.slice(2));
+    plan = readArgs(argv);
   } catch (err) {
     if (err instanceof WalkComplaint || err instanceof YardComplaint) {
-      process.stderr.write(`${err.message}\n`);
-      process.exitCode = 1;
-      return;
+      stderr.write(`${err.message}\n`);
+      return 1;
     }
     throw err;
   }
@@ -21,12 +28,13 @@ async function main(): Promise<void> {
   const browser = await openChromium(plan.openWaitMs);
   const sniffed = new Map<string, Scent[]>();
   const warned = new Set<string>();
+  const prodded: ProdRow[] = [];
 
   const remember = (href: string, look: Look): Scent[] => {
     for (const selector of look.badSelectors) {
       if (warned.has(selector)) continue;
       warned.add(selector);
-      process.stderr.write(`proddle: leash selector ${JSON.stringify(selector)} is not css.\n`);
+      stderr.write(`proddle: leash selector ${JSON.stringify(selector)} is not css.\n`);
     }
     const scents = scentsFrom(look.facts, plan.leashWords);
     sniffed.set(href, scents);
@@ -50,23 +58,40 @@ async function main(): Promise<void> {
         known !== undefined
           ? known
           : remember(page.href, await browser.look(page.href, plan.leashSelectors));
-      writePage(page.href, scents);
+      const rows = await browser.prod(
+        page.href,
+        scents,
+        plan.prodWaitMs,
+        plan.leashWords,
+        plan.leashSelectors,
+      );
+      for (const row of rows) prodded.push(row);
+      writePage(page.href, rows, stdout);
     }
   } finally {
     await browser.close();
   }
+
+  stdout.write(`\n${formatTally(prodded)}\n`);
+  return prodExitCode(prodded);
 }
 
-function writePage(href: string, scents: readonly Scent[]): void {
-  process.stdout.write(`${href}\n`);
-  for (const scent of scents) {
-    const held = scent.held === undefined ? "" : ` held: ${scent.held}`;
-    process.stdout.write(`  ${scent.kind} ${JSON.stringify(scent.label)} ${scent.selector}${held}\n`);
+function writePage(href: string, rows: readonly ProdRow[], stdout: Sink): void {
+  stdout.write(`${href}\n`);
+  for (const row of rows) stdout.write(`  ${formatProdLine(row)}\n`);
+}
+
+async function main(): Promise<void> {
+  try {
+    process.exitCode = await run(process.argv.slice(2));
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    process.stderr.write(`proddle: ${message}\n`);
+    process.exitCode = 1;
   }
 }
 
-main().catch((err: unknown) => {
-  const message = err instanceof Error ? err.message : String(err);
-  process.stderr.write(`proddle: ${message}\n`);
-  process.exitCode = 1;
-});
+const entry = process.argv[1];
+if (entry !== undefined && import.meta.url === pathToFileURL(entry).href) {
+  main();
+}

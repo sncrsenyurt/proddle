@@ -2,9 +2,11 @@
 
 I am writing a command line tool that walks a website and prods the clickable things on it. Same origin only, with a cap on pages and a cap on depth. On each page it should find buttons, links, `role="button"`, and elements that look like they carry a click handler. Each one gets a prod in a fresh page. I want a record of what followed: navigation, network requests, DOM changes, console errors, uncaught page errors, and HTTP 4xx or 5xx.
 
-Each prod will be filed as fine, a broken link, a yelp, or a limp. The output will be one HTML file I can open by itself. A leash keeps it off delete, remove, logout, log out, sign out, buy, pay, checkout, purchase, unsubscribe, deactivate, and cancel subscription. I can add more words or selectors.
+Each prod is filed as fine, a growl, a yelp, or a limp. A growl is a broken link: the navigation failed, or a response came back 4xx or 5xx. A yelp is a console error or an uncaught page error. A limp is a click I could not see do anything. A navigation that lands, a DOM change, a request, or a dialog counts as fine. The slate will be one HTML file I can open by itself. It is not written yet.
 
-The yard file loads and is checked. The command walks same-origin pages from a url or a yard file. On each page it lists the clickable things it found, and marks the ones the leash holds. It does not prod them yet, and it does not write a slate.
+A leash keeps it off delete, remove, logout, log out, sign out, buy, pay, checkout, purchase, unsubscribe, deactivate, and cancel subscription. I can add more words or selectors.
+
+The yard file loads and is checked. The command walks same-origin pages from a url or a yard file. On each page it lists the clickable things, holds back the ones on the leash, and prods the rest. Each prod is one fresh page. I print a tally and exit 1 when a prod is a limp, a yelp, or a growl.
 
 ## Words
 
@@ -14,7 +16,7 @@ The yard file loads and is checked. The command walks same-origin pages from a u
 - prod — one click, in a fresh page
 - limp — a prod that changes nothing
 - yelp — a console error or an uncaught page error during a prod
-- growl — an HTTP 4xx or 5xx seen during a prod
+- growl — an HTTP 4xx or 5xx during a prod, or a navigation that failed
 - bolt — a navigation caused by a prod
 - scratch — a DOM change after a prod
 - leash — skip words and selectors that must not be prodded
@@ -63,37 +65,43 @@ A leash word matches on its own, ignoring case, against the text, the aria-label
 
 ## Command
 
-`proddle https://example.com` walks that url with the default caps, the default open wait, and the built-in leash.
+`proddle https://example.com` walks that url with the default caps, the default waits, and the built-in leash.
 
 `proddle yards/porch.yard.json` reads the yard and walks its porch.
 
-`proddle https://example.com yards/site.yard.json` walks that url with the yard's caps, open wait, and leash.
+`proddle https://example.com yards/site.yard.json` walks that url with the yard's caps, waits, and leash.
 
 `--leash archive` adds a word. `--leash-selector .danger` adds a css selector. Both can be repeated, and `--leash=archive` works too. They join the yard's leash. The built-in words stay.
 
-It prints each page, then one line per scent:
+It prints each page, then one line per scent, then a tally:
 
     https://example.com/
-      anchor "Docs" #docs
+      anchor "Docs" #docs fine
+      button "Save" #save limp
+      anchor "Missing" #miss growl: 404
+      button "Boom" #boom yelp: boom
       button "Delete" #del held: word "delete"
 
-A scent the leash holds is still listed, with the reason. Nothing is clicked, and no slate is written. A bad yard, an unknown flag, or a url that is not http or https, is refused before Chromium starts. A leash selector that is not css is reported and ignored.
+    1 fine, 1 limp, 1 yelp, 1 growl, 1 held
+
+A held scent is listed and not clicked. `prodWaitMs` is how long I wait after a click. The click itself gives up sooner, so one element cannot stall the run. I exit 1 when the tally has a limp, a yelp, or a growl, and 0 otherwise. No slate is written. A bad yard, an unknown flag, or a url that is not http or https, is refused before Chromium starts. A leash selector that is not css is reported and ignored.
 
 ## Layout
 
 - `src/latch.ts` is the command.
-- `src/args.ts` decides the porch, the caps, and the leash from the arguments.
+- `src/args.ts` decides the porch, the caps, the waits, and the leash from the arguments.
 - `src/yard.ts` reads a yard file and checks it.
 - `src/links.ts` turns a raw href into a page on this origin, or nothing.
 - `src/amble.ts` is the walk.
 - `src/leash.ts` decides whether a leash word or selector holds a scent.
 - `src/selector.ts` builds a selector from the hints gathered on the page.
 - `src/sniff.ts` collects the scents.
-- `src/chromium.ts` opens pages with Playwright and sniffs them.
+- `src/prod.ts` clicks one scent and files what happened.
+- `src/chromium.ts` opens pages with Playwright, sniffs them, and prods them.
 - `npm run typecheck` runs `tsc --noEmit`.
 - `npm run build` writes `dist/latch.js`, which is what the `proddle` bin field points at.
 - `npm test` runs Vitest.
 
 ## Still to come
 
-Prodding, classifying each prod, a non-zero exit when something is wrong, the slate, a small demo site, and CI.
+The slate, a small demo site, and CI.

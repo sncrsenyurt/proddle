@@ -6,6 +6,7 @@ export type WalkPlan = {
   pageCap: number;
   depthCap: number;
   openWaitMs: number;
+  prodWaitMs: number;
   leashWords: readonly string[];
   leashSelectors: readonly string[];
 };
@@ -62,6 +63,7 @@ function planFrom(
     pageCap: yard?.pageCap ?? countDefaults.pageCap,
     depthCap: yard?.depthCap ?? countDefaults.depthCap,
     openWaitMs: yard?.openWaitMs ?? countDefaults.openWaitMs,
+    prodWaitMs: yard?.prodWaitMs ?? countDefaults.prodWaitMs,
     leashWords: leash.leashWords,
     leashSelectors: leash.leashSelectors,
   };

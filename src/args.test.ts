@@ -35,6 +35,7 @@ describe("readArgs", () => {
       pageCap: 20,
       depthCap: 2,
       openWaitMs: 15000,
+      prodWaitMs: 8000,
       leashWords: [...builtInLeashWords],
       leashSelectors: [],
     });
@@ -53,6 +54,7 @@ describe("readArgs", () => {
       pageCap: 4,
       depthCap: 1,
       openWaitMs: 3000,
+      prodWaitMs: 8000,
       leashWords: [...builtInLeashWords],
       leashSelectors: [],
     });
@@ -64,6 +66,7 @@ describe("readArgs", () => {
       pageCap: 20,
       depthCap: 2,
       openWaitMs: 15000,
+      prodWaitMs: 8000,
       leashWords: [...builtInLeashWords],
       leashSelectors: [],
     });
@@ -74,6 +77,7 @@ describe("readArgs", () => {
       porch: "https://other.test/ignored/",
       pageCap: 7,
       depthCap: 3,
+      prodWaitMs: 1200,
     });
 
     expect(readArgs(["http://example.com/a/", filePath])).toEqual({
@@ -81,6 +85,7 @@ describe("readArgs", () => {
       pageCap: 7,
       depthCap: 3,
       openWaitMs: 15000,
+      prodWaitMs: 1200,
       leashWords: [...builtInLeashWords],
       leashSelectors: [],
     });
@@ -133,6 +138,7 @@ describe("readArgs", () => {
       pageCap: 20,
       depthCap: 2,
       openWaitMs: 15000,
+      prodWaitMs: 8000,
       leashWords: [...builtInLeashWords, "archive", "cancel plan"],
       leashSelectors: [".old", ".bye"],
     });
