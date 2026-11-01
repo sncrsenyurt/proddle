@@ -1,6 +1,8 @@
 import { canonicalHref } from "./links.js";
 import { countDefaults, joinLeash, readYard, type Yard } from "./yard.js";
 
+export const defaultOutDir = "proddle-out";
+
 export type WalkPlan = {
   porch: string;
   pageCap: number;
@@ -9,6 +11,8 @@ export type WalkPlan = {
   prodWaitMs: number;
   leashWords: readonly string[];
   leashSelectors: readonly string[];
+  outDir: string;
+  shots: boolean;
 };
 
 export class WalkComplaint extends Error {
@@ -37,7 +41,7 @@ export function readArgs(argv: readonly string[]): WalkPlan {
   const second = args[1];
   if (parsed !== undefined) {
     const yard = second === undefined ? undefined : readYard(second);
-    return planFrom(canonicalHref(parsed.href), yard, pulled.words, pulled.selectors);
+    return planFrom(canonicalHref(parsed.href), yard, pulled);
   }
 
   if (second !== undefined) {
@@ -45,18 +49,17 @@ export function readArgs(argv: readonly string[]): WalkPlan {
   }
 
   const yard = readYard(first);
-  return planFrom(canonicalHref(yard.porch), yard, pulled.words, pulled.selectors);
+  return planFrom(canonicalHref(yard.porch), yard, pulled);
 }
 
 function planFrom(
   porch: string,
   yard: Yard | undefined,
-  words: readonly string[],
-  selectors: readonly string[],
+  pulled: { words: readonly string[]; selectors: readonly string[]; outDir: string | undefined; shots: boolean },
 ): WalkPlan {
   const leash = joinLeash(
-    [...(yard?.leashWords ?? []), ...words],
-    [...(yard?.leashSelectors ?? []), ...selectors],
+    [...(yard?.leashWords ?? []), ...pulled.words],
+    [...(yard?.leashSelectors ?? []), ...pulled.selectors],
   );
   return {
     porch,
@@ -66,6 +69,8 @@ function planFrom(
     prodWaitMs: yard?.prodWaitMs ?? countDefaults.prodWaitMs,
     leashWords: leash.leashWords,
     leashSelectors: leash.leashSelectors,
+    outDir: pulled.outDir ?? defaultOutDir,
+    shots: pulled.shots,
   };
 }
 
@@ -73,15 +78,23 @@ function pullFlags(args: readonly string[]): {
   positionals: string[];
   words: string[];
   selectors: string[];
+  outDir: string | undefined;
+  shots: boolean;
 } {
   const positionals: string[] = [];
   const words: string[] = [];
   const selectors: string[] = [];
+  let outDir: string | undefined;
+  let shots = false;
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index] ?? "";
     if (arg === "--") {
       positionals.push(...args.slice(index + 1));
       break;
+    }
+    if (arg === "--shots") {
+      shots = true;
+      continue;
     }
     const word = readFlag(arg, "--leash", args, index);
     if (word !== undefined) {
@@ -95,12 +108,18 @@ function pullFlags(args: readonly string[]): {
       index += selector.skip;
       continue;
     }
+    const out = readFlag(arg, "--out", args, index);
+    if (out !== undefined) {
+      outDir = requireFlag("--out", "a directory", out.value);
+      index += out.skip;
+      continue;
+    }
     if (arg.startsWith("--")) {
       throw new WalkComplaint(`unknown flag ${JSON.stringify(arg)}.`);
     }
     positionals.push(arg);
   }
-  return { positionals, words, selectors };
+  return { positionals, words, selectors, outDir, shots };
 }
 
 function readFlag(

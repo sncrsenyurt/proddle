@@ -1,5 +1,6 @@
 node_modules/
 dist/
+proddle-out/
 *.tsbuildinfo
 coverage/
 .DS_Store

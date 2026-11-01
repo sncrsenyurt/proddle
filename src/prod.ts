@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import type { BrowserContext, Page, Request } from "playwright";
 import { leashHold, type LeashSurface } from "./leash.js";
 import type { Scent } from "./sniff.js";
@@ -57,6 +58,11 @@ export type VerdictCounts = {
   yelp: number;
   growl: number;
   held: number;
+};
+
+export type ProdOptions = {
+  shotDir?: string;
+  pageIndex?: number;
 };
 
 type Armed = {
@@ -145,13 +151,18 @@ export async function prodPage(
   prodWaitMs: number,
   leashWords: readonly string[],
   leashSelectors: readonly string[],
+  options?: ProdOptions,
 ): Promise<ProdRow[]> {
   const rows: ProdRow[] = [];
-  for (const scent of scents) {
+  for (const [index, scent] of scents.entries()) {
     if (scent.held !== undefined) {
       rows.push(fillRow(href, scent, scent.held, freshWatch(), new Date().toISOString(), 0));
       continue;
     }
+    const shotFile =
+      options?.shotDir === undefined ? undefined : `${(options.pageIndex ?? 0) + 1}-${index + 1}.png`;
+    const shotPath =
+      shotFile === undefined || options?.shotDir === undefined ? undefined : join(options.shotDir, shotFile);
     const at = new Date();
     const started = Date.now();
     const attempt = await watchProd(
@@ -162,8 +173,11 @@ export async function prodPage(
       prodWaitMs,
       leashWords,
       leashSelectors,
+      shotPath,
     );
-    rows.push(fillRow(href, scent, attempt.held, attempt.watch, at.toISOString(), Date.now() - started));
+    const row = fillRow(href, scent, attempt.held, attempt.watch, at.toISOString(), Date.now() - started);
+    if (attempt.wroteShot && shotFile !== undefined) row.shot = `shots/${shotFile}`;
+    rows.push(row);
   }
   return rows;
 }
@@ -209,17 +223,23 @@ async function watchProd(
   prodWaitMs: number,
   leashWords: readonly string[],
   leashSelectors: readonly string[],
-): Promise<{ held: string | undefined; watch: ProdWatch }> {
+  shotPath: string | undefined,
+): Promise<{ held: string | undefined; watch: ProdWatch; wroteShot: boolean }> {
   const watch = freshWatch();
   const page = await context.newPage();
   const state = arm(page, watch);
+  const result: { held: string | undefined; watch: ProdWatch; wroteShot: boolean } = {
+    held: undefined,
+    watch,
+    wroteShot: false,
+  };
   let beforeUrl = href;
   try {
     try {
       await page.goto(href, { waitUntil: "domcontentloaded", timeout: openWaitMs });
     } catch {
       watch.navFailed = true;
-      return { held: undefined, watch };
+      return result;
     }
     watch.opened = true;
     beforeUrl = page.url();
@@ -227,16 +247,15 @@ async function watchProd(
     const budget = clickBudget(prodWaitMs);
     page.setDefaultTimeout(budget);
     const located = await locate(page, selector, watch);
-    if (located === "miss") return { held: undefined, watch };
+    if (located === "miss") return result;
 
-    let held: string | undefined;
     try {
-      held = await liveHold(page, selector, leashWords, leashSelectors);
+      result.held = await liveHold(page, selector, leashWords, leashSelectors);
     } catch (err) {
       watch.clickError = messageOf(err);
-      return { held: undefined, watch };
+      return result;
     }
-    if (held !== undefined) return { held, watch };
+    if (result.held !== undefined) return result;
 
     beforeUrl = page.url();
     const beforeHtml = await readMarkup(page);
@@ -245,14 +264,14 @@ async function watchProd(
       await page.locator(selector).click({ timeout: budget, noWaitAfter: true });
     } catch (err) {
       watch.clickError = messageOf(err);
-      return { held: undefined, watch };
+      return result;
     }
     await settle(state, watch, prodWaitMs);
     if (page.url() !== beforeUrl) watch.navigated = true;
     if (page.url().startsWith("chrome-error:")) watch.navFailed = true;
     const afterHtml = await readMarkup(page);
     if (afterHtml !== beforeHtml) watch.scratched = true;
-    return { held: undefined, watch };
+    return result;
   } finally {
     if (watch.opened) {
       try {
@@ -262,6 +281,14 @@ async function watchProd(
       } catch {
         watch.landed = undefined;
         watch.stayed = false;
+      }
+    }
+    if (shotPath !== undefined && watch.opened && result.held === undefined) {
+      try {
+        await page.screenshot({ path: shotPath });
+        result.wroteShot = true;
+      } catch {
+        result.wroteShot = false;
       }
     }
     await page.close();

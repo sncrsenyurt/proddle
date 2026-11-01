@@ -1,5 +1,5 @@
 import { createServer, type Server } from "node:http";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
@@ -77,30 +77,66 @@ describe("run against a local site", () => {
     for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
   });
 
-  function writeYard(value: unknown): string {
+  function scratch(): string {
     const dir = mkdtempSync(join(tmpdir(), "proddle-latch-"));
     dirs.push(dir);
-    const filePath = join(dir, "site.yard.json");
+    return dir;
+  }
+
+  function writeYard(value: unknown): string {
+    const filePath = join(scratch(), "site.yard.json");
     writeFileSync(filePath, `${JSON.stringify(value)}\n`, "utf8");
     return filePath;
   }
 
+  function onlyRun(out: string): string {
+    const names = readdirSync(out);
+    expect(names).toHaveLength(1);
+    return join(out, names[0] ?? "");
+  }
+
   it("prods a url with no yard and exits 0 when nothing is broken", async () => {
+    const out = scratch();
     const stdout = capture();
     const stderr = capture();
-    const code = await run([`${origin}/quiet`], stdout, stderr);
+    const code = await run([`${origin}/quiet`, "--out", out, "--shots"], stdout, stderr);
     expect(code).toBe(0);
     expect(stderr.text()).toBe("");
+    const folder = onlyRun(out);
+    const recordPath = join(folder, "record.json");
+    const slatePath = join(folder, "slate.html");
     expect(stdout.text()).toBe(
-      `${origin}/quiet\n  button "Save" #save fine\n\n1 fine, 0 limp, 0 yelp, 0 growl, 0 held\n`,
+      `${origin}/quiet\n  button "Save" #save fine\n\n1 fine, 0 limp, 0 yelp, 0 growl, 0 held\nrecord ${recordPath}\nslate ${slatePath}\n`,
     );
+    const record = JSON.parse(readFileSync(recordPath, "utf8")) as {
+      porch: string;
+      totals: { fine: number; held: number };
+      prods: { label: string; verdict: string; stayed: boolean; shot: string | null; scratched: boolean }[];
+    };
+    expect(record.porch).toBe(`${origin}/quiet`);
+    expect(record.totals.fine).toBe(1);
+    expect(record.totals.held).toBe(0);
+    expect(record.prods[0]?.label).toBe("Save");
+    expect(record.prods[0]?.verdict).toBe("fine");
+    expect(record.prods[0]?.stayed).toBe(true);
+    expect(record.prods[0]?.scratched).toBe(true);
+    expect(record.prods[0]?.shot).toBe("shots/1-1.png");
+    expect(existsSync(join(folder, "shots/1-1.png"))).toBe(true);
+    const slate = readFileSync(slatePath, "utf8");
+    expect(slate).toContain("Save");
+    expect(slate).toContain("shots/1-1.png");
+    expect(slate).not.toMatch(/<link\b/);
   }, 30_000);
 
   it("exits 1 when a prod is broken and does not click delete", async () => {
     const before = hits.length;
+    const out = scratch();
     const stdout = capture();
-    const code = await run([`${origin}/`], stdout, capture());
+    const code = await run([`${origin}/`, "--out", out], stdout, capture());
     expect(code).toBe(1);
+    const folder = onlyRun(out);
+    const recordPath = join(folder, "record.json");
+    const slatePath = join(folder, "slate.html");
     expect(stdout.text()).toBe(
       [
         `${origin}/`,
@@ -114,10 +150,38 @@ describe("run against a local site", () => {
         `${origin}/missing`,
         "",
         "2 fine, 1 limp, 1 yelp, 1 growl, 1 held",
+        `record ${recordPath}`,
+        `slate ${slatePath}`,
         "",
       ].join("\n"),
     );
     expect(hits.slice(before).some((hit) => hit.startsWith("/hit/del"))).toBe(false);
+    const record = JSON.parse(readFileSync(recordPath, "utf8")) as {
+      pages: { href: string }[];
+      skipped: unknown[];
+      prods: {
+        selector: string;
+        held: string | null;
+        verdict: string | null;
+        stayed: boolean;
+        failed: { url: string; status: number }[];
+        pageErrors: string[];
+        landed: string | null;
+      }[];
+    };
+    expect(record.pages.map((page) => page.href)).toEqual([`${origin}/`, `${origin}/docs`, `${origin}/missing`]);
+    expect(record.skipped).toEqual([]);
+    const miss = record.prods.find((prod) => prod.selector === "#miss");
+    expect(miss?.verdict).toBe("growl");
+    expect(miss?.stayed).toBe(false);
+    expect(miss?.landed).toContain("/missing");
+    expect(miss?.failed.some((hit) => hit.status === 404 && hit.url.includes("/missing"))).toBe(true);
+    const held = record.prods.find((prod) => prod.selector === "#del");
+    expect(held?.held).toBe('word "delete"');
+    expect(held?.verdict).toBeNull();
+    const boom = record.prods.find((prod) => prod.selector === "#boom");
+    expect(boom?.pageErrors.some((line) => line.includes("boom"))).toBe(true);
+    expect(readFileSync(slatePath, "utf8")).toContain("held");
   }, 40_000);
 
   it("takes an extra leash word from a yard and still exits 0", async () => {
@@ -129,8 +193,9 @@ describe("run against a local site", () => {
       prodWaitMs: 1500,
       leashWords: ["save"],
     });
+    const out = scratch();
     const stdout = capture();
-    const code = await run([`${origin}/quiet`, filePath], stdout, capture());
+    const code = await run([`${origin}/quiet`, filePath, "--out", out], stdout, capture());
     expect(code).toBe(0);
     expect(stdout.text()).toContain('button "Save" #save held: word "save"');
     expect(stdout.text()).toContain("0 fine, 0 limp, 0 yelp, 0 growl, 1 held");

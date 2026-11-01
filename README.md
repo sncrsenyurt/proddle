@@ -2,7 +2,7 @@
 
 I am writing a command line tool that walks a website and prods the clickable things on it. Same origin only, with a cap on pages and a cap on depth. On each page it should find buttons, links, `role="button"`, and elements that look like they carry a click handler. Each one gets a prod in a fresh page. I want a record of what followed: navigation, network requests, DOM changes, console errors, uncaught page errors, and HTTP 4xx or 5xx.
 
-Each prod is filed as fine, a growl, a yelp, or a limp. A growl is a broken link: the navigation failed, or a response came back 4xx or 5xx. A yelp is a console error or an uncaught page error. A limp is a click I could not see do anything. A navigation that lands, a DOM change, a request, or a dialog counts as fine. The slate will be one HTML file I can open by itself. It is not written yet.
+Each prod is filed as fine, a growl, a yelp, or a limp. A growl is a broken link: the navigation failed, or a response came back 4xx or 5xx. A yelp is a console error or an uncaught page error. A limp is a click I could not see do anything. A navigation that lands, a DOM change, a request, or a dialog counts as fine. The slate is one HTML file I can open by itself. The run writes it next to a json record.
 
 A leash keeps it off delete, remove, logout, log out, sign out, buy, pay, checkout, purchase, unsubscribe, deactivate, and cancel subscription. I can add more words or selectors.
 
@@ -73,6 +73,8 @@ A leash word matches on its own, ignoring case, against the text, the aria-label
 
 `--leash archive` adds a word. `--leash-selector .danger` adds a css selector. Both can be repeated, and `--leash=archive` works too. They join the yard's leash. The built-in words stay.
 
+`--out dir` sets the directory the run folder is written under. The default is `proddle-out`. `--shots` saves a png after each prod.
+
 It prints each page, then one line per scent, then a tally:
 
     https://example.com/
@@ -84,12 +86,18 @@ It prints each page, then one line per scent, then a tally:
 
     1 fine, 1 limp, 1 yelp, 1 growl, 1 held
 
-A held scent is listed and not clicked. `prodWaitMs` is how long I wait after a click. The click itself gives up sooner, so one element cannot stall the run. I exit 1 when the tally has a limp, a yelp, or a growl, and 0 otherwise. No slate is written. A bad yard, an unknown flag, or a url that is not http or https, is refused before Chromium starts. A leash selector that is not css is reported and ignored.
+A held scent is listed and not clicked. `prodWaitMs` is how long I wait after a click. The click itself gives up sooner, so one element cannot stall the run. I exit 1 when the tally has a limp, a yelp, or a growl, and 0 otherwise. A bad yard, an unknown flag, or a url that is not http or https, is refused before Chromium starts. A leash selector that is not css is reported and ignored.
+
+Each run makes its own folder. Inside is `record.json` and `slate.html`. The last two lines of the output are those paths.
+
+The record has the porch, the start and end time, the caps and waits, the pages opened, the pages skipped and why, and one entry per scent. A held scent is there with the leash reason and no click. A prod that ran has the url it landed on, or that it stayed, the failed requests with status and url, the console text, the page errors, whether a dialog, popup, or download showed up, whether the dom changed, the verdict, and how long it took.
+
+The slate groups those entries by page and by verdict. Held ones are in there too. The css and the script sit in the file.
 
 ## Layout
 
 - `src/latch.ts` is the command.
-- `src/args.ts` decides the porch, the caps, the waits, and the leash from the arguments.
+- `src/args.ts` decides the porch, the caps, the waits, the leash, and where the run is written.
 - `src/yard.ts` reads a yard file and checks it.
 - `src/links.ts` turns a raw href into a page on this origin, or nothing.
 - `src/amble.ts` is the walk.
@@ -97,6 +105,8 @@ A held scent is listed and not clicked. `prodWaitMs` is how long I wait after a 
 - `src/selector.ts` builds a selector from the hints gathered on the page.
 - `src/sniff.ts` collects the scents.
 - `src/prod.ts` clicks one scent and files what happened.
+- `src/record.ts` builds the run record and writes the folder.
+- `src/slate.ts` renders the slate.
 - `src/chromium.ts` opens pages with Playwright, sniffs them, and prods them.
 - `npm run typecheck` runs `tsc --noEmit`.
 - `npm run build` writes `dist/latch.js`, which is what the `proddle` bin field points at.
@@ -104,4 +114,4 @@ A held scent is listed and not clicked. `prodWaitMs` is how long I wait after a 
 
 ## Still to come
 
-The slate, a small demo site, and CI.
+A small demo site, and CI.

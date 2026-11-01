@@ -38,6 +38,8 @@ describe("readArgs", () => {
       prodWaitMs: 8000,
       leashWords: [...builtInLeashWords],
       leashSelectors: [],
+      outDir: "proddle-out",
+      shots: false,
     });
   });
 
@@ -57,6 +59,8 @@ describe("readArgs", () => {
       prodWaitMs: 8000,
       leashWords: [...builtInLeashWords],
       leashSelectors: [],
+      outDir: "proddle-out",
+      shots: false,
     });
   });
 
@@ -69,6 +73,8 @@ describe("readArgs", () => {
       prodWaitMs: 8000,
       leashWords: [...builtInLeashWords],
       leashSelectors: [],
+      outDir: "proddle-out",
+      shots: false,
     });
   });
 
@@ -88,6 +94,8 @@ describe("readArgs", () => {
       prodWaitMs: 1200,
       leashWords: [...builtInLeashWords],
       leashSelectors: [],
+      outDir: "proddle-out",
+      shots: false,
     });
   });
 
@@ -141,11 +149,28 @@ describe("readArgs", () => {
       prodWaitMs: 8000,
       leashWords: [...builtInLeashWords, "archive", "cancel plan"],
       leashSelectors: [".old", ".bye"],
+      outDir: "proddle-out",
+      shots: false,
     });
   });
 
   it("keeps a selector's case", () => {
     expect(readArgs(["https://example.com/", "--leash-selector", " #Pay "]).leashSelectors).toEqual(["#Pay"]);
+  });
+
+  it("takes an output directory and shots", () => {
+    const plan = readArgs(["--out", "runs", "--shots", "https://example.com/", "--out=other"]);
+    expect(plan.outDir).toBe("other");
+    expect(plan.shots).toBe(true);
+    expect(readArgs(["https://example.com/"]).shots).toBe(false);
+  });
+
+  it("refuses an empty output directory", () => {
+    expect(() => readArgs(["https://example.com/", "--out"])).toThrow("proddle: --out needs a directory.");
+    expect(() => readArgs(["--out="])).toThrow("proddle: --out needs a directory.");
+    expect(() => readArgs(["--out", "--shots", "https://example.com/"])).toThrow(
+      "proddle: --out needs a directory.",
+    );
   });
 
   it("refuses an unknown flag", () => {

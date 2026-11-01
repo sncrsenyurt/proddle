@@ -1,9 +1,13 @@
 #!/usr/bin/env node
+import { mkdirSync } from "node:fs";
+import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { amble } from "./amble.js";
+import { amble, skippedPages, type AmblePage } from "./amble.js";
 import { readArgs, WalkComplaint } from "./args.js";
 import { openChromium } from "./chromium.js";
 import { formatProdLine, formatTally, prodExitCode, type ProdRow } from "./prod.js";
+import { buildRecord, makeRunDir, writeRun } from "./record.js";
+import { renderSlate } from "./slate.js";
 import { scentsFrom, type Look, type Scent } from "./sniff.js";
 import { YardComplaint } from "./yard.js";
 
@@ -25,12 +29,21 @@ export async function run(
     throw err;
   }
 
+  const started = new Date();
   const browser = await openChromium(plan.openWaitMs);
+  const runDir = makeRunDir(plan.outDir, plan.porch, started);
+  const shotDir = plan.shots ? join(runDir, "shots") : undefined;
+  if (shotDir !== undefined) mkdirSync(shotDir);
+
   const sniffed = new Map<string, Scent[]>();
+  const hrefs = new Map<string, string[]>();
   const warned = new Set<string>();
   const prodded: ProdRow[] = [];
+  let pages: AmblePage[] = [];
+  let failure: unknown;
 
   const remember = (href: string, look: Look): Scent[] => {
+    hrefs.set(href, [...look.hrefs]);
     for (const selector of look.badSelectors) {
       if (warned.has(selector)) continue;
       warned.add(selector);
@@ -42,7 +55,7 @@ export async function run(
   };
 
   try {
-    const pages = await amble({
+    pages = await amble({
       porch: plan.porch,
       pageCap: plan.pageCap,
       depthCap: plan.depthCap,
@@ -52,7 +65,7 @@ export async function run(
         return look.hrefs;
       },
     });
-    for (const page of pages) {
+    for (const [index, page] of pages.entries()) {
       const known = sniffed.get(page.href);
       const scents =
         known !== undefined
@@ -64,15 +77,38 @@ export async function run(
         plan.prodWaitMs,
         plan.leashWords,
         plan.leashSelectors,
+        { shotDir, pageIndex: index },
       );
       for (const row of rows) prodded.push(row);
       writePage(page.href, rows, stdout);
     }
+  } catch (err) {
+    failure = err;
   } finally {
     await browser.close();
   }
 
+  const record = buildRecord({
+    porch: plan.porch,
+    started,
+    ended: new Date(),
+    limits: {
+      pageCap: plan.pageCap,
+      depthCap: plan.depthCap,
+      openWaitMs: plan.openWaitMs,
+      prodWaitMs: plan.prodWaitMs,
+    },
+    leashWords: plan.leashWords,
+    leashSelectors: plan.leashSelectors,
+    pages,
+    skipped: skippedPages(pages, hrefs, plan.depthCap),
+    prods: prodded,
+  });
+  const paths = writeRun(runDir, record, renderSlate(record));
   stdout.write(`\n${formatTally(prodded)}\n`);
+  stdout.write(`record ${paths.recordPath}\n`);
+  stdout.write(`slate ${paths.slatePath}\n`);
+  if (failure !== undefined) throw failure;
   return prodExitCode(prodded);
 }
 

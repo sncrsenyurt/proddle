@@ -1,5 +1,5 @@
 import { chromium, type BrowserContext } from "playwright";
-import { prodPage, type ProdRow } from "./prod.js";
+import { prodPage, type ProdOptions, type ProdRow } from "./prod.js";
 import { sniffSource, takeLook, type Look, type Scent } from "./sniff.js";
 
 export async function openChromium(openWaitMs: number): Promise<{
@@ -10,6 +10,7 @@ export async function openChromium(openWaitMs: number): Promise<{
     prodWaitMs: number,
     leashWords: readonly string[],
     leashSelectors: readonly string[],
+    options?: ProdOptions,
   ) => Promise<ProdRow[]>;
   close: () => Promise<void>;
 }> {
@@ -18,8 +19,8 @@ export async function openChromium(openWaitMs: number): Promise<{
     const context = await browser.newContext({ acceptDownloads: true });
     return {
       look: (href, leashSelectors) => lookAt(context, href, openWaitMs, leashSelectors),
-      prod: (href, scents, prodWaitMs, leashWords, leashSelectors) =>
-        prodPage(context, href, scents, openWaitMs, prodWaitMs, leashWords, leashSelectors),
+      prod: (href, scents, prodWaitMs, leashWords, leashSelectors, options) =>
+        prodPage(context, href, scents, openWaitMs, prodWaitMs, leashWords, leashSelectors, options),
       close: () => browser.close(),
     };
   } catch (err) {

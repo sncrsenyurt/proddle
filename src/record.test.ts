@@ -1,6 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
 import type { ProdRow } from "./prod.js";
-import { buildRecord, serializeRecord, type RunRecord } from "./record.js";
+import { buildRecord, makeRunDir, serializeRecord, writeRun, type RunRecord } from "./record.js";
+
+const dirs: string[] = [];
+
+afterEach(() => {
+  for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+});
 
 function row(over: Partial<ProdRow> = {}): ProdRow {
   return {
@@ -152,6 +161,35 @@ describe("buildRecord", () => {
     expect(record.prods[0]?.consoleErrors).toEqual([]);
     expect(record.prods[0]?.failed).toEqual([]);
     expect(record.totals).toEqual({ fine: 1, limp: 0, yelp: 0, growl: 0, held: 0 });
+  });
+});
+
+describe("writeRun", () => {
+  it("writes the json and the slate into a fresh folder", () => {
+    const out = mkdtempSync(join(tmpdir(), "proddle-record-"));
+    dirs.push(out);
+    const started = new Date("2026-11-01T03:49:12.345Z");
+    const dir = makeRunDir(out, "https://example.com:8443/docs", started);
+    expect(dir).toBe(join(out, "20261101-034912345-example.com-8443"));
+    const again = makeRunDir(out, "https://example.com:8443/docs", started);
+    expect(again).toBe(join(out, "20261101-034912345-example.com-8443-2"));
+
+    const record = buildRecord({
+      porch: "https://example.com:8443/docs",
+      started,
+      ended: started,
+      limits: { pageCap: 1, depthCap: 1, openWaitMs: 1000, prodWaitMs: 1000 },
+      leashWords: [],
+      leashSelectors: [],
+      pages: [],
+      skipped: [],
+      prods: [],
+    });
+    const paths = writeRun(dir, record, "<p>slate</p>\n");
+    expect(readFileSync(paths.recordPath, "utf8")).toBe(serializeRecord(record));
+    expect(readFileSync(paths.slatePath, "utf8")).toBe("<p>slate</p>\n");
+    expect(paths.recordPath.endsWith("record.json")).toBe(true);
+    expect(paths.slatePath.endsWith("slate.html")).toBe(true);
   });
 });
 
