@@ -4,12 +4,18 @@ import type { Scent } from "./sniff.js";
 
 export type Verdict = "fine" | "limp" | "yelp" | "growl";
 
+export type FailedHit = {
+  url: string;
+  status: number;
+};
+
 export type ProdWatch = {
   opened: boolean;
   navigated: boolean;
   navStatus: number | undefined;
   navFailed: boolean;
   badStatuses: number[];
+  failed: FailedHit[];
   requestCount: number;
   consoleErrors: string[];
   pageErrors: string[];
@@ -18,15 +24,39 @@ export type ProdWatch = {
   sawDialog: boolean;
   sawPopup: boolean;
   sawDownload: boolean;
+  landed: string | undefined;
+  stayed: boolean;
 };
 
 export type ProdRow = {
+  page: string;
   kind: Scent["kind"];
   label: string;
   selector: string;
   held: string | undefined;
   verdict: Verdict | undefined;
   detail: string;
+  at: string;
+  ms: number;
+  landed: string | undefined;
+  stayed: boolean;
+  scratched: boolean;
+  dialog: boolean;
+  popup: boolean;
+  download: boolean;
+  failed: FailedHit[];
+  consoleErrors: string[];
+  pageErrors: string[];
+  clickError: string | undefined;
+  shot: string | undefined;
+};
+
+export type VerdictCounts = {
+  fine: number;
+  limp: number;
+  yelp: number;
+  growl: number;
+  held: number;
 };
 
 type Armed = {
@@ -87,23 +117,24 @@ export function formatProdLine(row: ProdRow): string {
   return `${head} ${row.verdict}: ${row.detail}`;
 }
 
-export function formatTally(rows: readonly ProdRow[]): string {
-  let fine = 0;
-  let limp = 0;
-  let yelp = 0;
-  let growl = 0;
-  let held = 0;
+export function countVerdicts(rows: readonly Pick<ProdRow, "held" | "verdict">[]): VerdictCounts {
+  const counts: VerdictCounts = { fine: 0, limp: 0, yelp: 0, growl: 0, held: 0 };
   for (const row of rows) {
     if (row.held !== undefined || row.verdict === undefined) {
-      held += 1;
+      counts.held += 1;
       continue;
     }
-    if (row.verdict === "fine") fine += 1;
-    else if (row.verdict === "limp") limp += 1;
-    else if (row.verdict === "yelp") yelp += 1;
-    else growl += 1;
+    counts[row.verdict] += 1;
   }
-  return `${fine} fine, ${limp} limp, ${yelp} yelp, ${growl} growl, ${held} held`;
+  return counts;
+}
+
+export function formatCounts(counts: VerdictCounts): string {
+  return `${counts.fine} fine, ${counts.limp} limp, ${counts.yelp} yelp, ${counts.growl} growl, ${counts.held} held`;
+}
+
+export function formatTally(rows: readonly ProdRow[]): string {
+  return formatCounts(countVerdicts(rows));
 }
 
 export async function prodPage(
@@ -118,9 +149,11 @@ export async function prodPage(
   const rows: ProdRow[] = [];
   for (const scent of scents) {
     if (scent.held !== undefined) {
-      rows.push(heldRow(scent, scent.held));
+      rows.push(fillRow(href, scent, scent.held, freshWatch(), new Date().toISOString(), 0));
       continue;
     }
+    const at = new Date();
+    const started = Date.now();
     const attempt = await watchProd(
       context,
       href,
@@ -130,31 +163,41 @@ export async function prodPage(
       leashWords,
       leashSelectors,
     );
-    if (attempt.held !== undefined) {
-      rows.push(heldRow(scent, attempt.held));
-      continue;
-    }
-    const verdict = verdictOf(attempt.watch);
-    rows.push({
-      kind: scent.kind,
-      label: scent.label,
-      selector: scent.selector,
-      held: undefined,
-      verdict,
-      detail: detailOf(attempt.watch, verdict),
-    });
+    rows.push(fillRow(href, scent, attempt.held, attempt.watch, at.toISOString(), Date.now() - started));
   }
   return rows;
 }
 
-function heldRow(scent: Scent, held: string): ProdRow {
+function fillRow(
+  href: string,
+  scent: Scent,
+  held: string | undefined,
+  watch: ProdWatch,
+  at: string,
+  ms: number,
+): ProdRow {
+  const verdict = held === undefined ? verdictOf(watch) : undefined;
   return {
+    page: href,
     kind: scent.kind,
     label: scent.label,
     selector: scent.selector,
     held,
-    verdict: undefined,
-    detail: "",
+    verdict,
+    detail: verdict === undefined ? "" : detailOf(watch, verdict),
+    at,
+    ms,
+    landed: watch.landed,
+    stayed: watch.stayed,
+    scratched: watch.scratched,
+    dialog: watch.sawDialog,
+    popup: watch.sawPopup,
+    download: watch.sawDownload,
+    failed: watch.failed.map((hit) => ({ url: hit.url, status: hit.status })),
+    consoleErrors: [...watch.consoleErrors],
+    pageErrors: [...watch.pageErrors],
+    clickError: watch.clickError,
+    shot: undefined,
   };
 }
 
@@ -170,6 +213,7 @@ async function watchProd(
   const watch = freshWatch();
   const page = await context.newPage();
   const state = arm(page, watch);
+  let beforeUrl = href;
   try {
     try {
       await page.goto(href, { waitUntil: "domcontentloaded", timeout: openWaitMs });
@@ -178,6 +222,7 @@ async function watchProd(
       return { held: undefined, watch };
     }
     watch.opened = true;
+    beforeUrl = page.url();
 
     const budget = clickBudget(prodWaitMs);
     page.setDefaultTimeout(budget);
@@ -188,18 +233,18 @@ async function watchProd(
     try {
       held = await liveHold(page, selector, leashWords, leashSelectors);
     } catch (err) {
-      watch.clickError = clip(messageOf(err), detailLimit);
+      watch.clickError = messageOf(err);
       return { held: undefined, watch };
     }
     if (held !== undefined) return { held, watch };
 
-    const beforeUrl = page.url();
+    beforeUrl = page.url();
     const beforeHtml = await readMarkup(page);
     state.armed = true;
     try {
       await page.locator(selector).click({ timeout: budget, noWaitAfter: true });
     } catch (err) {
-      watch.clickError = clip(messageOf(err), detailLimit);
+      watch.clickError = messageOf(err);
       return { held: undefined, watch };
     }
     await settle(state, watch, prodWaitMs);
@@ -209,6 +254,16 @@ async function watchProd(
     if (afterHtml !== beforeHtml) watch.scratched = true;
     return { held: undefined, watch };
   } finally {
+    if (watch.opened) {
+      try {
+        const now = page.url();
+        watch.landed = now;
+        watch.stayed = now === beforeUrl;
+      } catch {
+        watch.landed = undefined;
+        watch.stayed = false;
+      }
+    }
     await page.close();
   }
 }
@@ -227,11 +282,11 @@ function arm(page: Page, watch: ProdWatch): Armed {
 
   page.on("console", (msg) => {
     if (!state.armed || msg.type() !== "error") return;
-    watch.consoleErrors.push(clip(msg.text(), detailLimit));
+    watch.consoleErrors.push(msg.text());
   });
   page.on("pageerror", (err) => {
     if (!state.armed) return;
-    watch.pageErrors.push(clip(err.message, detailLimit));
+    watch.pageErrors.push(err.message);
   });
   page.on("request", (req) => {
     if (!state.armed || isFavicon(req.url())) return;
@@ -244,7 +299,10 @@ function arm(page: Page, watch: ProdWatch): Armed {
     const req = res.request();
     if (!seen.has(req)) return;
     const status = res.status();
-    if (status >= 400) watch.badStatuses.push(status);
+    if (status >= 400) {
+      watch.badStatuses.push(status);
+      watch.failed.push({ url: res.url(), status });
+    }
     if (!isMainNav(req, page)) return;
     watch.navStatus = status;
     watch.navigated = true;
@@ -279,7 +337,7 @@ async function locate(page: Page, selector: string, watch: ProdWatch): Promise<"
   try {
     matches = await page.locator(selector).count();
   } catch (err) {
-    watch.clickError = clip(messageOf(err), detailLimit);
+    watch.clickError = messageOf(err);
     return "miss";
   }
   if (matches === 1) return "ok";
@@ -375,6 +433,9 @@ function freshWatch(): ProdWatch {
     sawDialog: false,
     sawPopup: false,
     sawDownload: false,
+    landed: undefined,
+    stayed: false,
+    failed: [],
   };
 }
 

@@ -1,4 +1,4 @@
-import { canonicalHref, resolveLink } from "./links.js";
+import { canonicalHref, linkSkip, resolveLink } from "./links.js";
 
 export type AmblePage = {
   href: string;
@@ -36,4 +36,56 @@ export async function amble(input: {
   }
 
   return found;
+}
+
+export type SkipWhy = "page cap" | "depth cap" | "other origin" | "not http";
+
+export type SkippedPage = {
+  href: string;
+  from: string;
+  why: SkipWhy;
+};
+
+export function skippedPages(
+  pages: readonly AmblePage[],
+  hrefsByPage: ReadonlyMap<string, readonly string[]>,
+  depthCap: number,
+): SkippedPage[] {
+  const opened = new Set(pages.map((page) => page.href));
+  const skipped: SkippedPage[] = [];
+  const seen = new Set<string>();
+  const capped = new Map<string, { from: string; shallow: boolean }>();
+
+  const push = (item: SkippedPage): void => {
+    const key = `${item.why}\n${item.from}\n${item.href}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    skipped.push(item);
+  };
+
+  for (const page of pages) {
+    const raws = hrefsByPage.get(page.href) ?? [];
+    const shallow = page.depth < depthCap;
+    for (const raw of raws) {
+      const href = resolveLink(page.href, raw);
+      if (href !== undefined) {
+        if (opened.has(href)) continue;
+        const have = capped.get(href);
+        if (have === undefined) capped.set(href, { from: page.href, shallow });
+        else if (!have.shallow && shallow) {
+          have.from = page.href;
+          have.shallow = true;
+        }
+        continue;
+      }
+      const rejected = linkSkip(page.href, raw);
+      if (rejected === undefined) continue;
+      push({ href: rejected.href, from: page.href, why: rejected.why });
+    }
+  }
+
+  for (const [href, item] of capped) {
+    push({ href, from: item.from, why: item.shallow ? "page cap" : "depth cap" });
+  }
+  return skipped;
 }

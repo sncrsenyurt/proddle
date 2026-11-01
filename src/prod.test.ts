@@ -29,18 +29,35 @@ function watch(over: Partial<ProdWatch> = {}): ProdWatch {
     sawDialog: false,
     sawPopup: false,
     sawDownload: false,
+    landed: undefined,
+    stayed: false,
+    failed: [],
     ...over,
   };
 }
 
 function row(over: Partial<ProdRow> = {}): ProdRow {
   return {
+    page: "https://example.com/",
     kind: "button",
     label: "Save",
     selector: "#save",
     held: undefined,
     verdict: "fine",
     detail: "",
+    at: "2026-11-01T00:00:00.000Z",
+    ms: 10,
+    landed: "https://example.com/",
+    stayed: true,
+    scratched: false,
+    dialog: false,
+    popup: false,
+    download: false,
+    failed: [],
+    consoleErrors: [],
+    pageErrors: [],
+    clickError: undefined,
+    shot: undefined,
     ...over,
   };
 }

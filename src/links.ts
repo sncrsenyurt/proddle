@@ -2,11 +2,14 @@ export function canonicalHref(href: string): string {
   return normalize(new URL(href));
 }
 
-export function resolveLink(fromHref: string, raw: string): string | undefined {
+type ReadLink =
+  | { kind: "page"; href: string }
+  | { kind: "other origin"; href: string }
+  | { kind: "not http"; href: string };
+
+function readLink(fromHref: string, raw: string): ReadLink | undefined {
   const text = raw.trim();
-  if (text === "") {
-    return undefined;
-  }
+  if (text === "") return undefined;
 
   let url: URL;
   try {
@@ -15,14 +18,28 @@ export function resolveLink(fromHref: string, raw: string): string | undefined {
     return undefined;
   }
   if (url.protocol !== "http:" && url.protocol !== "https:") {
-    return undefined;
+    return { kind: "not http", href: text };
   }
-
   const from = new URL(fromHref);
   if (url.origin !== from.origin) {
-    return undefined;
+    return { kind: "other origin", href: url.href };
   }
-  return normalize(url);
+  return { kind: "page", href: normalize(url) };
+}
+
+export function resolveLink(fromHref: string, raw: string): string | undefined {
+  const read = readLink(fromHref, raw);
+  if (read === undefined || read.kind !== "page") return undefined;
+  return read.href;
+}
+
+export function linkSkip(
+  fromHref: string,
+  raw: string,
+): { href: string; why: "other origin" | "not http" } | undefined {
+  const read = readLink(fromHref, raw);
+  if (read === undefined || read.kind === "page") return undefined;
+  return { href: read.href, why: read.kind };
 }
 
 function normalize(url: URL): string {

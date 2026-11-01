@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canonicalHref, resolveLink } from "./links.js";
+import { canonicalHref, linkSkip, resolveLink } from "./links.js";
 
 describe("canonicalHref", () => {
   it("drops the hash and a trailing slash", () => {
@@ -81,5 +81,35 @@ describe("resolveLink", () => {
 
   it("resolves a link from an ipv6 porch", () => {
     expect(resolveLink("http://[::1]:8741/start", "/next")).toBe("http://[::1]:8741/next");
+  });
+});
+
+describe("linkSkip", () => {
+  const from = "https://example.com/docs/intro";
+
+  it("names another origin and a scheme that is not http", () => {
+    expect(linkSkip(from, "https://other.test/a")).toEqual({
+      href: "https://other.test/a",
+      why: "other origin",
+    });
+    expect(linkSkip(from, "//cdn.example.com/app")).toEqual({
+      href: "https://cdn.example.com/app",
+      why: "other origin",
+    });
+    expect(linkSkip(from, "  mailto:hi@example.com  ")).toEqual({
+      href: "mailto:hi@example.com",
+      why: "not http",
+    });
+    expect(linkSkip(from, "javascript:void(0)")).toEqual({
+      href: "javascript:void(0)",
+      why: "not http",
+    });
+  });
+
+  it("stays quiet for a same-origin page, a blank, and a hash", () => {
+    expect(linkSkip(from, "/pricing/")).toBeUndefined();
+    expect(linkSkip(from, "   ")).toBeUndefined();
+    expect(linkSkip(from, "#top")).toBeUndefined();
+    expect(linkSkip(from, "http://[")).toBeUndefined();
   });
 });

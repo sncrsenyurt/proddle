@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { amble, type ReadLinks } from "./amble.js";
+import { amble, skippedPages, type ReadLinks } from "./amble.js";
 
 function fakeSite(pages: Record<string, readonly string[]>): {
   readLinks: ReadLinks;
@@ -136,6 +136,28 @@ describe("amble", () => {
       "https://example.com/docs/guide",
     ]);
     expect(reads).toEqual(["https://example.com/docs"]);
+  });
+
+  it("notes pages left behind, and links that were never pages", () => {
+    const pages = [
+      { href: "https://example.com/", depth: 0 },
+      { href: "https://example.com/a", depth: 1 },
+    ];
+    const hrefs = new Map<string, readonly string[]>([
+      [
+        "https://example.com/",
+        ["/a", "/b", "mailto:hi@example.com", "https://other.test/no", "#top", "/b"],
+      ],
+      ["https://example.com/a", ["/a/deep", "https://other.test/no", "/b"]],
+    ]);
+
+    expect(skippedPages(pages, hrefs, 1)).toEqual([
+      { href: "mailto:hi@example.com", from: "https://example.com/", why: "not http" },
+      { href: "https://other.test/no", from: "https://example.com/", why: "other origin" },
+      { href: "https://other.test/no", from: "https://example.com/a", why: "other origin" },
+      { href: "https://example.com/b", from: "https://example.com/", why: "page cap" },
+      { href: "https://example.com/a/deep", from: "https://example.com/a", why: "depth cap" },
+    ]);
   });
 
   it("lets a read failure through", async () => {
