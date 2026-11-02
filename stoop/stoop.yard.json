@@ -1,0 +1,7 @@
+{
+  "porch": "http://127.0.0.1:8741",
+  "pageCap": 10,
+  "depthCap": 2,
+  "openWaitMs": 10000,
+  "prodWaitMs": 3000
+}

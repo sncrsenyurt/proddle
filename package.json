@@ -19,7 +19,8 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "proddle": "node dist/latch.js"
+    "proddle": "node dist/latch.js",
+    "stoop": "node stoop/serve.mjs"
   },
   "dependencies": {
     "playwright": "^1.64.1"

@@ -1,0 +1,21 @@
+body {
+  margin: 2rem auto;
+  max-width: 36rem;
+  font: 16px/1.45 ui-sans-serif, system-ui, sans-serif;
+  color: #221f1a;
+  background: #f3f0e8;
+}
+
+nav {
+  display: flex;
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+button {
+  font: inherit;
+}
+
+section {
+  margin: 1.2rem 0;
+}
