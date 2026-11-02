@@ -1,0 +1,72 @@
+name: walk
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  stoop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: install
+        run: npm ci
+
+      - name: chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: unit tests
+        run: npm test
+
+      - name: build
+        run: npm run build
+
+      - name: start the stoop
+        run: |
+          node --input-type=module <<'JS'
+          import { spawn } from "node:child_process";
+          import { openSync } from "node:fs";
+          const log = openSync(`${process.env.RUNNER_TEMP}/stoop.log`, "a");
+          const child = spawn(process.execPath, ["stoop/serve.mjs"], {
+            detached: true,
+            stdio: ["ignore", log, log],
+          });
+          child.unref();
+          JS
+
+      - name: wait for the stoop
+        run: |
+          for _ in $(seq 1 25); do
+            if curl -fsS -o /dev/null http://127.0.0.1:8741/; then
+              exit 0
+            fi
+            sleep 0.2
+          done
+          echo "stoop never listened" >&2
+          cat "$RUNNER_TEMP/stoop.log" >&2 || true
+          exit 1
+
+      - name: prod the stoop
+        run: |
+          set +e
+          node dist/latch.js http://127.0.0.1:8741 stoop/stoop.yard.json --out proddle-out
+          code=$?
+          set -e
+          node stoop/expect.mjs proddle-out "$code"
+
+      - name: upload the run
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: proddle-run
+          path: proddle-out
+          if-no-files-found: ignore
