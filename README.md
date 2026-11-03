@@ -2,6 +2,12 @@
 
 proddle walks a website and prods the clickable things on it. Same origin only, with a cap on pages and a cap on depth. On each page it finds buttons, links, `role="button"`, and elements that look like they carry a click handler. Each one gets a prod in a fresh page. The run keeps what followed: navigation, network requests, DOM changes, console errors, uncaught page errors, and HTTP 4xx or 5xx.
 
+This is a real run against the stoop, the demo site in `stoop/`. First the terminal, then the top of the slate it wrote.
+
+![proddle run against the stoop](docs/terminal.png)
+
+![slate from that run](docs/slate.png)
+
 Each prod is filed as fine, a growl, a yelp, or a limp. A growl is a broken link: the navigation failed, or a response came back 4xx or 5xx. A yelp is a console error or an uncaught page error. A limp is a click that did not seem to do anything. A navigation that lands, a DOM change, a request, or a dialog counts as fine. The slate is one HTML file, opened by itself. The run writes it next to a json record.
 
 A leash keeps it off delete, remove, logout, log out, sign out, buy, pay, checkout, purchase, unsubscribe, deactivate, and cancel subscription. Extra words and selectors can be added.
